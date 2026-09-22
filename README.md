@@ -1,161 +1,129 @@
 # dsh-agent-forge
 
-A multi-agent forge for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
+[中文](README.md) | [English](README_en.md)
 
-Define named agents once — model, reasoning effort, persona, visible tool set —
-then let each workspace decide which agents it offers, which one leads, and how
-work is routed between them. A single canvas shows every delegation the run
-produced, and each node opens the work behind it.
+给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 用的多智能体锻造台。
 
-## Status
+只需定义一次命名 agent——模型、推理强度、人格、可见工具集——之后由每个工作区决定启用哪些
+agent、谁当 lead、工作如何在它们之间路由。一张画布列出一次运行产生的全部委派，每个节点都能
+打开它背后那次会话。
 
-Complete and installed. The `agentForge` service resolves the agent list and each
-workspace's decisions from the plugin's settings namespace, with three built-in
-agents and shipped dispatch rules; built-in copy follows the language chosen in
-the app's own language setting. The browser half contributes a settings page (the
-agent roster with per-agent model provider, model, reasoning effort, persona,
-visible tool set, plugin set, optional preset reference and delegation depth; the
-per-workspace selections and rules; the deployment's default routing rules) and a
-run canvas that shows every delegation a session made, one card per run, grouped
-by the agent that ran it. The mode half contributes the delegation tool, a
-subagent provider per agent, and the dispatch-rules injection.
+## 现状
 
-Every surface is verified, the last ones in a real browser: the mode picker offers
-the preset, the sidebar entry opens the canvas, the settings page renders the
-shipped roster, every tab survives being switched to, the model pickers are filled
-from the catalogue route, and a real session composed under this mode carries the
-injected dispatch rules in its conversation.
+功能完整并已安装。`agentForge` 服务从插件的 settings 命名空间解析 agent 列表与每个工作区的
+决定，内置三个 agent 与随包发布的分派规则；内置文案跟随应用自身的语言设置。浏览器半边提供
+一个设置页（agent 花名册：每个 agent 的模型提供方、模型、推理强度、人格、可见工具集、插件集、
+可选的 preset 引用与委派深度；每个工作区的启用项与规则；部署默认路由规则）和一张运行画布
+（一次会话产生的每次委派各一张卡片，按执行它的 agent 分组）。mode 半边提供委派工具、每个
+agent 一个 subagent provider，以及分派规则注入。
 
-`ARCHITECTURE.md` records every design decision behind this, with the evidence
-each one rests on.
+每个界面都已验证，最后几项在真实浏览器里跑过：模式选择器能列出这份 preset，侧边栏入口能打开
+画布，设置页能渲染出随包发布的花名册，每个标签页都能被切换，模型选择器由目录路由填充，并且
+在这个模式下真实新开的会话，其对话里确实带着注入的分派规则。
 
-## Agents are presets
+`ARCHITECTURE.md` 记录了以上每个设计决策及其依据。
 
-An agent is not a bag of options passed to a subagent call. Each agent owns a
-**composition**, and in dsh a composition is an agent preset, so that is what this
-plugin generates:
+## Agent 就是 preset
+
+agent 不是一包塞给 subagent 调用的参数。每个 agent 拥有一份**组合（composition）**，而在 dsh
+里组合就是 agent preset，所以本插件生成的就是它：
 
 ```
-~/.dsh/.agent-presets/<agentId>/preset.yml         how it appears in the picker
-~/.dsh/.agent-presets/<agentId>/agent.cordis.yml   the plugin rows it mounts
+~/.dsh/.agent-presets/<agentId>/preset.yml         它如何出现在选择器里
+~/.dsh/.agent-presets/<agentId>/agent.cordis.yml   它挂载的插件行
 ```
 
-The checkboxes on the settings page write that second file. Checking a plugin adds
-a capability to that agent. The tree groups the deployment's roster by function,
-leaves out the modules the baseline already supplies — and says how many were left
-out, so the list still reads as complete — and lets a whole group be checked at
-once. Naming an existing preset in the preset picker makes the checkboxes inert
-instead: the agent then runs somebody else's composition verbatim.
+设置页上的勾选框写的就是第二个文件。勾一个插件就是给这个 agent 加一项能力。这棵树按功能给
+部署的花名册分组，略去基线已经提供的模块——并说明略去了多少项，让列表看起来仍然完整——还
+支持整组一次勾选。在预设选择器里指定一份现成 preset 会让勾选框失效：那个 agent 就原样跑别人
+的组合。
 
-The generated file is the **baseline's rows plus the agent's own**, never the
-agent's rows alone:
+生成文件是**基线的行加上该 agent 自己的行**，永远不是只有它自己的行：
 
 ```
-agent.cordis.yml = <baseline/agent.cordis.yml rows, embedded as they stand> + <checked plugins>
+agent.cordis.yml = <baseline/agent.cordis.yml 的行，原样内嵌> + <勾选的插件>
 ```
 
-The baseline is a file **this package owns** (`baseline/agent.cordis.yml`): a
-persistent shell, native file read/write/search, skills, and web search/fetch —
-the set the deployment's `butler` mode uses, minus that mode's persona. Owning it
-is the point: an agent's composition must not depend on a preset somebody else may
-rename, slim, or not install at all, and `presetRef` on one agent is how a
-deployment opts into `standard`, `butler`, or a hand-written preset instead.
+基线是**本包自带的一个文件**（`baseline/agent.cordis.yml`）：持久 shell、原生文件读写/检索、
+技能、web 搜索/抓取——即本部署 `butler` 模式用的那套，去掉该模式的人格。自己拥有它才是关键：
+agent 的组合不能取决于某份 preset 会不会被改名、被裁瘦、或者根本没装；而某一个 agent 上填
+`presetRef` 就是部署选择改用 `standard`、`butler` 或手写 preset 的方式。
 
-Three consequences of "one file per agent, baseline embedded":
+"每个 agent 一个文件、基线内嵌"带来三个后果：
 
-- A session joins exactly one standing composition, so a file holding only the
-  checked rows would mount no tools at all. Embedding is what DSH leaves
-  available: `mount` binds a session's scope to a single standing mount, and
-  `cordis:include` names a configuration file for the Loader's root rather than a
-  second composition for one agent.
-- The embed is verbatim so the baseline's per-service `isolate` realms
-  (`isolate: { terminals: true }`) survive; a row that publishes a service outside
-  one is refused as process-global.
-- The baseline is frozen at the version installed. An upgrade of dsh does not
-  change it, and a row added to a future `standard` does not appear here. Edit the
-  installed file to tune a deployment's agents, or point an agent at a
-  hand-written preset through `presetRef`.
+- 一个会话只 join **一份**常驻组合，所以只装勾选行的文件会一个工具都不挂载。内嵌是 DSH 留下的
+  唯一办法：`mount` 把一个会话的 scope 绑定到单一常驻挂载，而 `cordis:include` 指的是 Loader
+  根部的配置文件，不是某个 agent 的第二份组合。
+- 内嵌是逐字节的，这样基线里那几个**按服务名**的 `isolate` realm
+  （`isolate: { terminals: true }`）才能保留；在 realm 之外发布服务的行会被当作进程级服务拒绝。
+- 基线随安装的版本冻结。升级 dsh 不会改它，未来 `standard` 新增的行也不会出现在这里。要调就
+  改安装后的那个文件，或者用某个 agent 的 `presetRef` 指向手写 preset。
 
-Two consequences worth knowing before checking a box: the plugin cannot tell which
-services a package publishes before mounting it, so a checked module that
-publishes one is rejected by the preset mount — install such a module as a profile
-bundle instead (a `dsh.profile.bundles` entry), where it is composed once for
-every session. And an agent whose id matches a preset directory this plugin did
-not generate is refused rather than overwritten: rename the agent, or point it at
-that preset through `presetRef`.
+勾选之前有两件事值得知道：插件无法在挂载之前判断一个包会发布哪些服务，所以勾一个会发布服务
+的模块会被 preset 挂载拒绝——这种模块应当装成 profile bundle（写进 `dsh.profile.bundles`），
+它对每个会话只组合一次。另外，如果某个 agent 的 id 撞上了一份**不是本插件生成**的 preset
+目录，写入会被拒绝而不是覆盖：给 agent 改名，或者用 `presetRef` 指向那份 preset。
 
-Delegation stays in **one process**. The mode registers one `ctx.subagents`
-provider per agent, named `forge:<agentId>`, and that provider:
+委派始终在**同一个进程**里。mode 为每个 agent 注册一个 `ctx.subagents` provider，名字是
+`forge:<agentId>`，该 provider：
 
-1. creates a session through `ctx.agents.create` — created agents inherit no
-   preset, which is what makes them composable;
-2. selects the agent's preset **before the first turn**, because dsh fixes a
-   session's preset once it has started;
-3. applies the persona and the tool filter through `applyChildComposition`, and
-   enforces the depth cap by resolving the child depth before creating anything;
-4. delivers the prompt and reads the final assistant text back.
+1. 通过 `ctx.agents.create` 建会话——新建的 agent 不继承任何 preset，这正是它们可被组合的前提；
+2. 在**首个 turn 之前**选定该 agent 的 preset，因为 dsh 一旦开始就固定一个会话的 preset；
+3. 通过 `applyChildComposition` 施加人格与工具过滤器，并在创建任何东西之前解析子层深度，以落实
+   深度上限；
+4. 投递 prompt，并读回最终的助手文本。
 
-Going through the subagent seam rather than around it is deliberate: lifecycle
-events, the run catalog the canvas reads, cancellation and disposal all keep
-working, and only the child's *composition* comes from here.
+走 subagent 这条缝而不是绕过它是刻意的：生命周期事件、画布读取的运行目录、取消与释放都照常
+工作，从这里来的只有子会话的**组合**。
 
-The per-request model route is unchanged. Provider, model and reasoning effort
-still travel as `agentOptions`, and the reasoning-effort options are the levels
-the chosen model itself declares.
+每次请求的模型路由没有变化。provider、model 与推理强度仍然作为 `agentOptions` 传递，可选强度
+就是所选模型自己声明的那些档位。
 
-## Two halves, two planes
+## 两半，两个平面
 
-The package exports three entry points because one plugin row cannot sit on two
-planes:
+本包导出三个入口，因为一行插件不能同时待在两个平面上：
 
-| Export | Plane | What it contributes |
+| 导出 | 平面 | 贡献什么 |
 |---|---|---|
-| `.` | Host, inserted by `cordis.patch.yml` | The `agentForge` service and the settings namespace |
-| `./mode` | A preset, mounted by `presets/agent-forge/agent.cordis.yml` | The delegation tool, one subagent provider per agent, and the dispatch-rules injection |
-| `./client` | The browser, discovered from `dsh.client` | The settings page |
+| `.` | Host，由 `cordis.patch.yml` 插入 | `agentForge` 服务与 settings 命名空间 |
+| `./mode` | 一份 preset，由 `presets/agent-forge/agent.cordis.yml` 挂载 | 委派工具、每个 agent 一个 subagent provider、分派规则注入 |
+| `./client` | 浏览器，由 `dsh.client` 发现 | 设置页 |
 
-`ctx.tools.register` and `ctx.on` file into the calling context's scope, so the
-mode's row contributes only to sessions that joined the mode's preset.
-Registering either on the Host plane would put the tool and the routing rules in
-front of every session in every mode.
+`ctx.tools.register` 与 `ctx.on` 会落进调用上下文的 scope，所以 mode 那一行只对 join 了该模式
+preset 的会话生效。把这两者注册到 Host 平面，会让这个工具和路由规则出现在所有模式的每个会话
+面前。
 
-## Install
+## 安装
 
 ```sh
-npm pack                                  # produce dsh-agent-forge-0.1.0.tgz
+npm pack                                  # 产出 dsh-agent-forge-0.1.0.tgz
 dsh plugin --profile web add ./dsh-agent-forge-0.1.0.tgz
-node scripts/install-preset.mjs           # place the mode's preset
+node scripts/install-preset.mjs           # 放置 mode 的 preset
 ```
 
-`install-preset.mjs` copies the preset into `~/.dsh/.agent-presets/` and then
-checks that its row will resolve. That check matters because the answer is not
-the obvious one: dsh resolves a preset's **package** row against the *profile*
-(`rowResolves` → `packageInstalled`, an upward `node_modules` walk from the
-profile directory), not against the preset's own directory. Asking Node instead
-answers `MODULE_NOT_FOUND` and would report a healthy preset as broken — so the
-script mirrors dsh's own test, and keeps the row's portable package name.
+`install-preset.mjs` 把 preset 拷进 `~/.dsh/.agent-presets/`，然后检查它的行能否被解析。这个检查
+有必要，因为答案不是想当然的那个：dsh 是把 preset 的**包**行对着 *profile* 解析的
+（`rowResolves` → `packageInstalled`，从 profile 目录向上走 `node_modules`），而不是对着 preset
+自己的目录。直接问 Node 会得到 `MODULE_NOT_FOUND`，把一份健康的 preset 报成坏的——所以脚本
+镜像了 dsh 自己的判定，并保留该行的可移植包名。
 
-**Install from the packed tarball, not from the directory.** `dsh plugin add
-<directory>` records a `link:` dependency, and Node resolves a symlink's imports
-through its *real* path — so the plugin would import `@deepseek-ai/cordis` from
-its own `node_modules` instead of the profile's. Cordis identifies its `Service`
-base class by module identity, so a second copy breaks the plugin contract
-silently. A packed install lands physically in
-`~/.dsh/profiles/web/node_modules/`, where resolution walks up to the same tree
-every other bundle uses.
+**要从打好的 tarball 安装，不要从目录安装。** `dsh plugin add <目录>` 记的是 `link:` 依赖，而
+Node 解析软链接的 import 时走的是它的**真实**路径——于是插件会从自己的 `node_modules` 而不是
+profile 的那份导入 `@deepseek-ai/cordis`。Cordis 靠模块身份识别它的 `Service` 基类，第二份拷贝
+会无声地破坏插件契约。tarball 安装是物理落在 `~/.dsh/profiles/web/node_modules/`，解析会向上走
+到与其他每个 bundle 相同的树。
 
-You can confirm that after installing:
+装完可以这样确认：
 
 ```sh
 node -e "console.log(require('module').createRequire('$HOME/.dsh/profiles/web/node_modules/dsh-agent-forge/lib/index.js').resolve('@deepseek-ai/cordis'))"
 ```
 
-It must print the same path as it does for a bundle you know works.
+它打印的路径必须与一个你确定能用的 bundle 打出来的一致。
 
-**A tarball install is a snapshot, and re-adding the same tarball is a no-op.**
-pnpm decides by path and version, prints "Lockfile is up to date, resolution step
-is skipped", and copies nothing. After rebuilding, remove and re-add, then compare
-byte sizes:
+**tarball 安装是快照，重复 add 同一个 tarball 是空操作。** pnpm 按路径和版本判断，打印
+"Lockfile is up to date, resolution step is skipped"，什么都不拷。所以重建之后要 remove 再
+add，然后比对字节大小：
 
 ```sh
 npm run build
@@ -164,60 +132,48 @@ dsh plugin --profile web remove dsh-agent-forge
 dsh plugin --profile web add ./dsh-agent-forge-0.1.0.tgz
 ```
 
-The install registers the Host row through `cordis.patch.yml` and ships the
-browser bundle through `dsh.client`. Bundle membership is read at startup, so
-restart the profile and reload the page.
+安装会通过 `cordis.patch.yml` 注册 Host 行，并通过 `dsh.client` 交付浏览器 bundle。bundle 成员
+是在启动时读取的，所以要重启 profile 并刷新页面。
 
-The preset directory is what makes the mode appear in the new-session mode
-picker. `~/.dsh/.agent-presets/` is scanned by default, and preset discovery
-re-reads the roots on every list, so a preset added there shows up without a
-restart — only the package install itself needs one.
+preset 目录才是让这个 mode 出现在"新建会话"模式选择器里的东西。`~/.dsh/.agent-presets/` 默认
+会被扫描，而 preset 发现每次列举都会重读各个 root，所以放进那里的 preset 不用重启就会出现——
+只有这个包本身的安装需要重启。
 
-## Build
+## 构建
 
 ```sh
 npm install --ignore-scripts
-npm run check             # typecheck, build all faces, then the keyless smoke suites
-npm run check:installed   # the above, plus the installed-environment suite
-npm run build             # writes lib/index.js, lib/core.js, lib/mode.js, lib/client.js
-npm run watch             # rebuild every face on change
-npm run typecheck         # both compiler faces
-npm run smoke             # artifacts, resolution, the page, the panorama, the locale, and the DOM
-npm run smoke:installed   # mounts the installed package against the harness's own cordis
-npm run smoke:browser     # boots a throwaway harness and drives the UI in headless Chromium
-npm run probe:session     # one real session in this mode, then reads its transcript
+npm run check             # 类型检查、构建全部面，然后跑无密钥 smoke 套件
+npm run check:installed   # 上面这些，外加已安装环境套件
+npm run build             # 写出 lib/index.js、lib/core.js、lib/mode.js、lib/client.js
+npm run watch             # 改动时重建每个面
+npm run typecheck         # 两个编译器面
+npm run smoke             # 产物、解析、页面、全景图、语言与 DOM
+npm run smoke:installed   # 把已安装的包挂到 harness 自己的 cordis 上
+npm run smoke:browser     # 起一个一次性 harness，在无头 Chromium 里驱动 UI
+npm run probe:session     # 在这个模式下跑一次真实会话，然后读它的轨迹
 ```
 
-`smoke:installed` and `smoke:browser` need the package installed into the profile,
-which is why they are separate from `check`; `check:installed` runs the lot.
-`probe:session` is deliberately never automatic: it spends a real model call.
+`smoke:installed` 与 `smoke:browser` 需要包已安装进 profile，所以它们与 `check` 分开；
+`check:installed` 一次跑全套。`probe:session` 刻意从不自动运行：它会花掉一次真实模型调用。
 
-`smoke:installed` needs the package installed into the profile, which is why it is
-separate from `check`. It exists because two failure modes are invisible to every
-offline suite: a plugin that does not survive being mounted by the harness's real
-Cordis, and a settings namespace that real schemastery refuses to register.
-Neither produces any output in this deployment — the harness's logger has no
-exporter — so a failed mount looks exactly like a page that renders nothing.
+`smoke:installed` 之所以与 `check` 分开，是因为有两种失败模式对所有离线套件都不可见：插件经不
+起被 harness 真实的 Cordis 挂载，以及真实 schemastery 拒绝注册某个 settings 命名空间。这两种
+在本部署里都不产生任何输出——harness 的 logger 没有导出器——所以一次失败的挂载看起来和"页面
+什么都没渲染"一模一样。
 
-The browser half is covered at two levels. A server render checks what a given
-snapshot draws; a jsdom mount through `react-dom/client` checks what a *mounted*
-page does, which is the only way to observe an effect that runs after mount or an
-interaction that changes what is drawn. Both matter here: the run canvas asks the
-host for a delegation catalogue on mount, because the session list carries none
-until something asks for one.
+浏览器半边有两层覆盖。服务端渲染检查给定快照画出什么；通过 `react-dom/client` 的 jsdom 挂载
+检查一个**已挂载**的页面会做什么——这是观察"挂载后才跑的 effect"或"改变绘制结果的交互"的
+唯一办法。两者在这里都重要：运行画布在挂载时向 host 要一份委派目录，因为在有东西主动要之前，
+会话列表里什么都不带。
 
-`npm install` needs `--ignore-scripts` because the DSH file sandbox refuses the
-piped stdio that npm's lifecycle scripts use. esbuild's platform binary arrives
-through its optional dependency, so nothing is missing.
+`npm install` 需要 `--ignore-scripts`，因为 DSH 的文件沙箱拒绝 npm 生命周期脚本使用的管道
+stdio。esbuild 的平台二进制通过它的可选依赖到达，所以不缺东西。
 
-The repository's own client preset resolves its target through the package
-manifests inside the harness checkout, so a package outside it cannot use that
-preset. `scripts/build.mjs` reproduces the contracts it owns: the Host half is
-ESM with every harness specifier external, and the browser half is a CommonJS
-factory registered through `window.__ModuleLoader__.load(...)` with exactly the
-shell's platform modules external.
+本仓库自己的 client preset 是通过 harness 检出内的包清单来解析目标的，所以检出之外的包用不了
+那份 preset。`scripts/build.mjs` 复现了它拥有的两份契约：Host 半边是 ESM、所有 harness
+specifier 都外部化；浏览器半边是 CommonJS 工厂，通过 `window.__ModuleLoader__.load(...)`
+注册，只把 shell 的平台模块外部化。
 
-`lib/core.js` is the pure resolution core, bundled separately so the smoke test
-can exercise the agent and workspace rules without a Cordis context. It is not
-part of the plugin surface — `lib/index.js` is what the Loader mounts.
-
+`lib/core.js` 是纯解析核心，单独打包，好让 smoke 测试在没有 Cordis 上下文的情况下检验 agent
+与工作区规则。它不属于插件表面——Loader 挂载的是 `lib/index.js`。

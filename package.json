@@ -22,7 +22,8 @@
     "lib/client.js.map",
     "presets",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "README_en.md"
   ],
   "dsh": {
     "bundle": {
