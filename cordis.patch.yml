@@ -1,0 +1,13 @@
+# dsh-agent-forge bundle patch.
+#
+# This row is the Host plane only: the `agentForge` service and the settings
+# namespace it registers. The mode's own contributions — the delegation tool and
+# the workspace dispatch-rules injection — live in the package's `./mode` export
+# and are mounted by the preset under `presets/agent-forge/`, because both are
+# per-mode facts rather than process-wide ones.
+#
+# The browser half needs no row: it is discovered from this package's
+# `dsh.client` manifest and served as `lib/client.js`.
+- insert:
+    - id: agent-forge
+      name: dsh-agent-forge

@@ -1,0 +1,21 @@
+# The forge's mode.
+#
+# One row, deliberately alone. Everything this mode contributes — the delegation
+# tool, the workspace dispatch-rules injection, the agent roster itself — is
+# resolved at run time from configuration the user edits in the browser. A mode
+# that enumerated its tools here would put composition back into a file the user
+# cannot reach, which is the thing this mode exists to avoid.
+#
+# The name below is the portable spelling. `scripts/install-preset.mjs` rewrites
+# the installed copy to this machine's module path whenever Node cannot resolve
+# this name from the preset's own directory — the usual outcome, because the
+# upward `node_modules` walk from `~/.dsh/.agent-presets/` does not pass through
+# the profile. Never edit the installed copy by hand; re-run the script.
+- id: agent-forge-mode
+  name: 'dsh-agent-forge/mode'
+  config:
+    dispatchToolName: forge_dispatch
+    # The namespace the per-agent providers are registered under, so each agent
+    # runs on its own `<namespace>:<agentId>` provider — which is what gives the
+    # child a session composed from that agent's own preset.
+    dispatchProvider: forge

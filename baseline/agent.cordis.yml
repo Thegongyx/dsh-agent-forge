@@ -1,0 +1,123 @@
+# The composition this plugin gives every agent it generates.
+#
+# It is OWNED here on purpose. The generated file used to copy the deployment's
+# `standard` preset, which made every forge agent's capability set depend on a
+# preset somebody else may rename, slim, or not install at all. This file is the
+# dependency instead: it ships with the package, and an agent's composition is
+# always this baseline plus the rows that agent checks.
+#
+# The row set follows the deployment's `butler` mode — a persistent shell, native
+# file read/write/search, skills, and web search/fetch — because a delegated
+# agent needs to look at files and the web, and does not need the coding-agent
+# extras (plan mode, goals, compaction, workflows, ralph, nested delegation).
+# Nothing here is copied from `butler` at run time: this is the plugin's own text,
+# and `presetRef` on one agent is how a deployment opts back into `standard` or
+# into any hand-written preset instead.
+#
+# Rows that publish a service sit in a group carrying an `isolate` realm naming
+# that service. `isolate` is a map of service name to realm label; a bare `true`
+# isolates nothing, and a service published outside a realm is refused by the
+# roster as process-global.
+
+# ── identity ────────────────────────────────────────────────────────────────
+
+# A delegation shadows this section: `dsh-subagent` installs the agent's own
+# persona under the same `deployment:persona-prefix` name in the child's nearer
+# scope, so this row is what a HUMAN session on the generated mode reads.
+#
+# `complete` and `includeRuntimeContext` are deliberately absent. A complete
+# section would replace the whole system prompt, and `includeRuntimeContext:
+# false` suppresses EVERY context section for anything joined to this mount —
+# including the statement `dsh-subagent` adds for delegated children ("your
+# permission scope was fixed when you were started … do not retry the denied
+# operation"). A delegated agent needs that statement.
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    prefix: >-
+      You are a coding agent powered by the {{model}} model.
+    suffix: Your working directory is {{cwd}}.
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+# ── persistent shell ────────────────────────────────────────────────────────
+
+# The PTY registry is an agent-owned service, so it lives in an entry-local
+# realm. The backend still consumes the host sandbox policy and subprocess
+# implementation, while the tool registers into this mount's scoped catalog.
+#
+# Exactly one shell stack mounts per platform: the bash stack gates off win32 and
+# its pwsh twin gates off POSIX, mirroring the one-shot shell rows. `node-pty`
+# ships prebuilt binaries for win32-x64, so a deployment that denies its build
+# script still gets a working terminal.
+- id: persistent-shell
+  name: cordis:group
+  group: true
+  isolate:
+    terminals: true
+  config:
+    - id: pty
+      name: '@deepseek-ai/dsh-terminal'
+
+    - id: terminal-bash
+      name: '@deepseek-ai/dsh-terminal-bash'
+      disabled: !!js process.platform === 'win32'
+      config:
+        timeoutMs: 300000
+
+    - id: persistent-bash
+      name: '@deepseek-ai/dsh-tool-bash-persistent'
+      disabled: !!js process.platform === 'win32'
+      config:
+        timeoutMs: 300000
+
+    - id: terminal-pwsh
+      name: '@deepseek-ai/dsh-terminal-bash'
+      disabled: !!js process.platform !== 'win32'
+      config:
+        shellDialect: pwsh
+        timeoutMs: 300000
+
+    - id: persistent-pwsh
+      name: '@deepseek-ai/dsh-tool-pwsh-persistent'
+      disabled: !!js process.platform !== 'win32'
+      config:
+        timeoutMs: 300000
+
+# ── filesystem ──────────────────────────────────────────────────────────────
+
+# Both register into the host `tools` registry and publish nothing, so they need
+# no realm. The fs service and its policy stay on the host plane. `read_image`
+# arrives with the first of these, which is what a screenshot-reading agent runs
+# on.
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# ── skills ──────────────────────────────────────────────────────────────────
+
+# The skill registry lives on the host plane and is layered per scope: these rows
+# register into this mount's layer, so they need no realm.
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+# ── web ─────────────────────────────────────────────────────────────────────
+
+# The web service and its providers stay on the host plane (this deployment's
+# search provider comes from a profile bundle); only the model-facing tool is
+# per-session.
+- id: tool-web
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    fetch: true
+    searchTimeoutMs: 60000

@@ -1,0 +1,86 @@
+{
+  "name": "dsh-agent-forge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-agent forge for dsh: define agents, scope them per workspace, dispatch work by rule, and watch every delegation on one canvas.",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./mode": "./lib/mode.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "baseline",
+    "lib/index.js",
+    "lib/index.js.map",
+    "lib/mode.js",
+    "lib/mode.js.map",
+    "lib/client.js",
+    "lib/client.js.map",
+    "presets",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "verify": "node scripts/build.mjs --verify",
+    "preset": "node scripts/install-preset.mjs",
+    "smoke": "node scripts/smoke.mjs && node scripts/smoke-client.mjs && node scripts/smoke-mode.mjs && node scripts/dom-smoke.mjs",
+    "smoke:installed": "node scripts/installed-smoke.mjs",
+    "smoke:browser": "node scripts/browser-smoke.mjs",
+    "probe:session": "node scripts/session-probe.mjs",
+    "typecheck": "tsc -p tsconfig.host.json && tsc -p tsconfig.client.json",
+    "check": "npm run typecheck && npm run build && npm run smoke",
+    "check:installed": "npm run check && npm run smoke:installed && npm run smoke:browser"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-agent": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-api-session-controller": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-api-workspace-controller": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-brand": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-locale": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-store": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-ui-layout": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-ui-session": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-ui-sidebar": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-client-ui-workspace": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-llm": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-session": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-settings": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-subagent": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-token-meter": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-tools": "^0.1.5-rc.2",
+    "@deepseek-ai/dsh-workspace": "^0.1.5-rc.2",
+    "@deepseek-ai/schemastery": "^3.18.2",
+    "@types/node": "^24.13.4",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.1",
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.0.1",
+    "playwright-core": "^1.63.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.9.3"
+  }
+}

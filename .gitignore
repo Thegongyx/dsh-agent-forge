@@ -1,0 +1,8 @@
+node_modules/
+lib/
+*.tsbuildinfo
+
+# Packed installs, and the screenshots the browser suites write when they fail.
+*.tgz
+.browser-*.png
+.session-probe.png
